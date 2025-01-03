@@ -1,0 +1,116 @@
+#include <esp_now.h>
+#include <WiFi.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// OLED pins
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define SDA_PIN 7  // GPIO7
+#define SCL_PIN 6  // GPIO6
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+// Structure for receiving data
+typedef struct {
+  int counter;
+  bool buttonPressed;
+} EncoderData;
+
+EncoderData encoderData;
+
+// Define the correct combination
+const int correctCombination[] = {4, 2, 3};  // Example: Combination is "42"
+const int combinationLength = 3;         // Length of the combination
+int enteredCombination[combinationLength];
+int currentIndex = 0;
+
+// ESP-NOW callback function
+void onDataReceived(const esp_now_recv_info *recvInfo, const uint8_t *data, int len) {
+  memcpy(&encoderData, data, sizeof(encoderData));
+
+  // Display the current number
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Enter Code:");
+  display.setCursor(0, 16);
+  display.print(encoderData.counter);
+  display.display();
+
+  // Handle button press to enter the digit
+  if (encoderData.buttonPressed) {
+    // Add current number to the combination
+    if (currentIndex < combinationLength) {
+      enteredCombination[currentIndex] = encoderData.counter;
+      currentIndex++;
+    }
+
+    // Check if the full combination is entered
+    if (currentIndex == combinationLength) {
+      bool isCorrect = true;
+
+      // Validate combination
+      for (int i = 0; i < combinationLength; i++) {
+        if (enteredCombination[i] != correctCombination[i]) {
+          isCorrect = false;
+          break;
+        }
+      }
+
+      // Display result
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      if (isCorrect) {
+        display.println("Access    Granted");
+        } else {
+        display.println("Access    Denied");
+      }
+      display.display();
+
+      delay(2000);  // Show the result for 2 seconds
+      currentIndex = 0;  // Reset for next attempt
+    } else {
+      // Prompt for the next digit
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.println("Next Number:");
+      display.display();
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  // Initialize OLED
+  Wire.begin(SDA_PIN, SCL_PIN);
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println("OLED initialization failed");
+    for (;;)
+      ;
+  }
+
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("Waiting for data...");
+  display.display();
+
+  // Initialize WiFi in station mode
+  WiFi.mode(WIFI_STA);
+
+  // Initialize ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+
+  // Register the receive callback
+  esp_now_register_recv_cb(onDataReceived);
+}
+
+void loop() {
+  // Loop does nothing; everything handled in callback
+}
