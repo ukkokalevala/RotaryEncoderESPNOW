@@ -1,0 +1,94 @@
+#include <esp_now.h>
+#include <WiFi.h>
+#include <RotaryEncoder.h>
+
+// Rotary Encoder Pins
+#define CLK 4  // GPIO4
+#define DT 3   // GPIO3
+#define SW 5   // GPIO5 (Button)
+
+// Variables for rotary encoder
+int counter = 0;
+int lastStateCLK;
+bool buttonPressed = false;
+
+// Structure for sending data
+typedef struct {
+  int counter;
+  bool buttonPressed;
+} EncoderData;
+
+EncoderData encoderData;
+
+// Receiver MAC address (Replace with your Receiver's MAC address)
+uint8_t receiverMAC[] = {0x34, 0xB4, 0x72, 0x4E, 0xCB, 0x74};
+
+// Function to send encoder data
+void sendEncoderData() {
+  esp_now_send(receiverMAC, (uint8_t *)&encoderData, sizeof(encoderData));
+}
+
+// Button press interrupt
+void IRAM_ATTR handleButtonPress() {
+  buttonPressed = true;
+  encoderData.buttonPressed = true;
+  sendEncoderData();
+  encoderData.buttonPressed = false;
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  // Set up pins
+  pinMode(CLK, INPUT);
+  pinMode(DT, INPUT);
+  pinMode(SW, INPUT_PULLUP);
+
+  // Attach interrupt to the button
+  attachInterrupt(digitalPinToInterrupt(SW), handleButtonPress, FALLING);
+
+  // Read initial state of the CLK pin
+  lastStateCLK = digitalRead(CLK);
+
+  // Initialize WiFi in station mode
+  WiFi.mode(WIFI_STA);
+
+  // Initialize ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+
+  // Add peer
+  esp_now_peer_info_t peerInfo = {};
+  memcpy(peerInfo.peer_addr, receiverMAC, 6);
+  peerInfo.channel = 0;
+  peerInfo.encrypt = false;
+
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.println("Failed to add peer");
+    return;
+  }
+}
+
+void loop() {
+  // Read the current state of the rotary encoder
+  int currentStateCLK = digitalRead(CLK);
+
+  if (currentStateCLK != lastStateCLK) {
+    // Check the direction
+    if (digitalRead(DT) != currentStateCLK) {
+      counter++;
+    } else {
+      counter--;
+    }
+
+    encoderData.counter = counter;
+    sendEncoderData();
+  }
+
+  // Save the last state of the CLK
+  lastStateCLK = currentStateCLK;
+
+  delay(10);
+}
