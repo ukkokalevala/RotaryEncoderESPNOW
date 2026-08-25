@@ -1,4 +1,4 @@
-o split the rotary encoder and the OLED combination lock logic across two ESP devices using ESP-NOW, the encoder's ESP will act as a transmitter, sending updates (like position changes or button presses) to the OLED ESP, which acts as a receiver.
+To split the rotary encoder and the OLED combination lock logic across two ESP devices using ESP-NOW, the encoder's ESP will act as a transmitter, sending updates (like position changes or button presses) to the OLED ESP, which acts as a receiver.
 Overview of the Changes
 1. Transmitter (Encoder ESP):
 o Reads the rotary encoder's position and button state.
